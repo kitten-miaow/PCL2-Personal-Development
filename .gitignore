@@ -12,9 +12,8 @@ temp/
 backups/
 *.zip
 
-# PyInstaller 打包产物（exe 体积大，不提交 git）
+# PyInstaller 中间构建（不提交）；dist/ 中的 exe 打包产物需提交，故放行
 build/
-dist/
 *.spec
 
 # 本地配置（不提交个人路径）
