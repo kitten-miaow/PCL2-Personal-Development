@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+.env
+
+# 工具产生的临时文件与备份包
+temp/
+backups/
+*.zip
+
+# 本地配置（不提交个人路径）
+config/settings.json
+
+# IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# 系统
+Thumbs.db
+.DS_Store
+desktop.ini
