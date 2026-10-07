@@ -144,6 +144,12 @@ class App(ctk.CTk):
         s = self.settings
         entries: dict[str, ctk.CTkEntry] = {}
 
+        def browse(key):
+            d = filedialog.askdirectory(title="选择文件夹")
+            if d:
+                entries[key].delete(0, "end")
+                entries[key].insert(0, d)
+
         def row(label, key, ph):
             f = ctk.CTkFrame(self.content, fg_color="transparent")
             f.pack(fill="x", padx=26, pady=4)
@@ -152,6 +158,9 @@ class App(ctk.CTk):
             e = ctk.CTkEntry(f, placeholder_text=ph, text_color=TEXT,
                              fg_color=CARD, border_color=BORDER)
             e.pack(side="left", fill="x", expand=True)
+            ctk.CTkButton(f, text="浏览…", width=64, height=30, fg_color=CARD,
+                          hover_color=CARD_HOVER, text_color=TEXT,
+                          command=lambda k=key: browse(k)).pack(side="left", padx=(6, 0))
             e.insert(0, s.get(key, ""))
             entries[key] = e
             return f
@@ -370,12 +379,15 @@ class App(ctk.CTk):
 
         toolbar = ctk.CTkFrame(self.content, fg_color="transparent")
         toolbar.pack(fill="x", padx=26, pady=4)
-        ctk.CTkButton(toolbar, text="🔍 扫描并校验", width=140, height=34,
+        ctk.CTkButton(toolbar, text="🔍 扫描并校验", width=120, height=34,
                       fg_color=ACCENT_DARK, hover_color="#24a86e", text_color="#ffffff",
                       command=self._scan_java).pack(side="left")
+        ctk.CTkButton(toolbar, text="💿 全盘扫描", width=110, height=34, fg_color=CARD,
+                      hover_color=CARD_HOVER, text_color=TEXT,
+                      command=self._scan_whole_disk).pack(side="left", padx=8)
         self.extra_entry = ctk.CTkEntry(toolbar, placeholder_text="额外 Java 目录（可选，分号分隔）",
                                         fg_color=CARD, border_color=BORDER,
-                                        text_color=TEXT, width=320)
+                                        text_color=TEXT, width=300)
         self.extra_entry.pack(side="left", padx=10)
 
         self.java_scroll = ctk.CTkScrollableFrame(self.content, fg_color=BG, corner_radius=0)
@@ -400,6 +412,29 @@ class App(ctk.CTk):
         self.java_status.configure(text="正在扫描并校验…")
         extra = [Path(x.strip()) for x in self.extra_entry.get().split(";") if x.strip()]
         run_async(jm.scan_java, extra, on_done=self._render_java_list)
+
+    def _scan_whole_disk(self):
+        """全盘遍历所有盘符查找 java.exe（跳过系统目录），后台执行并实时显示进度。"""
+        self.java_status.configure(text="正在全盘扫描（跳过系统目录），可能需要几分钟…")
+        extra = [Path(x.strip()) for x in self.extra_entry.get().split(";") if x.strip()]
+
+        def progress(drive, found, cur, total):
+            self.after(0, lambda: self.java_status.configure(
+                text=f"正在扫描 {drive}（{cur}/{total} 个盘）…已找到 {found} 个 Java"))
+
+        def worker():
+            try:
+                paths = jm.scan_java_whole_disk(progress=progress)
+                # 合并额外目录
+                extra_found = jm.scan_java_dirs(extra)
+                merged = {str(Path(p)).lower(): Path(p) for p in list(paths) + extra_found}
+                infos = [jm.probe_java(p) for p in merged.values()]
+            except Exception as e:  # noqa: BLE001
+                self.after(0, lambda: self.java_status.configure(text=f"全盘扫描失败：{e}"))
+                return
+            self.after(0, lambda: self._render_java_list(infos))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _render_java_list(self, result):
         for w in self.java_scroll.winfo_children():

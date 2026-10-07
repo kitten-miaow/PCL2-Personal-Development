@@ -1,14 +1,24 @@
 """Java 扫描、版本识别与可用性校验。"""
 from __future__ import annotations
 
+import ctypes
 import os
 import re
 import subprocess
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 VERSION_RE = re.compile(r"version \"([^\"]+)\"")
 BITS_RE = re.compile(r"(\d+)-?[Bb]it")
+
+# 全盘扫描时跳过的系统/无关目录（这些位置几乎不可能有 Java 且遍历极慢）
+SKIP_DIR_NAMES = {
+    "$RECYCLE.BIN", "System Volume Information", "Windows", "ProgramData",
+    "Recovery", "Documents and Settings", "PerfLogs", "node_modules", ".git",
+    "__pycache__", "venv", ".venv", ".gradle", ".m2", "AppData",
+    "GameSave", "Steam", "Epic Games",
+}
 
 
 @dataclass
@@ -103,3 +113,52 @@ def build_pcl_java_entry(info: JavaInfo) -> dict:
         "Bitness": info.bitness,
         "Available": info.ok,
     }
+
+
+def _get_fixed_drives() -> list[str]:
+    """枚举所有存在盘符（A: 到 Z:），返回如 ['C:\\', 'D:\\']。"""
+    drives = []
+    bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+    for letter in range(ord("A"), ord("Z") + 1):
+        if bitmask & (1 << (letter - ord("A"))):
+            drive = f"{chr(letter)}:\\"
+            if os.path.isdir(drive):
+                drives.append(drive)
+    return drives
+
+
+def scan_java_whole_disk(progress=None, max_time: float = 180.0,
+                         stop_event=None) -> list[Path]:
+    """全盘遍历所有盘符查找 java.exe（跳过系统/无关目录）。
+
+    progress(drive: str, found: int, current: int, total: int) 为进度回调。
+    找到 200 个或超过 max_time 秒自动停止，防止异常耗时。
+    """
+    found: set[str] = set()
+    start = time.time()
+    drives = _get_fixed_drives()
+    total = len(drives)
+    for idx, drive in enumerate(drives):
+        if stop_event is not None and stop_event.is_set():
+            break
+        if progress:
+            progress(drive, len(found), idx + 1, total)
+        try:
+            for dirpath, dirnames, filenames in os.walk(drive):
+                # 过滤黑名单与隐藏目录
+                dirnames[:] = [d for d in dirnames
+                               if d not in SKIP_DIR_NAMES and not d.startswith("$")]
+                if stop_event is not None and stop_event.is_set():
+                    break
+                if time.time() - start > max_time:
+                    return sorted(found)
+                for fn in filenames:
+                    if fn.lower() == "java.exe":
+                        found.add(os.path.join(dirpath, fn))
+                if len(found) >= 200:
+                    return sorted(found)
+        except OSError:
+            continue
+        if time.time() - start > max_time:
+            break
+    return sorted(found)
