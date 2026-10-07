@@ -253,7 +253,10 @@ class App(ctk.CTk):
 
         info = ctk.CTkFrame(card, fg_color="transparent")
         info.pack(side="left", fill="both", expand=True, padx=14, pady=10)
-        ctk.CTkLabel(info, text=f"🗺 {s.name}", font=ctk.CTkFont(size=15, weight="bold"),
+        title = f"🗺 {s.name}"
+        if s.isolated_version:
+            title += f"   🔒 版本隔离：{s.isolated_version}"
+        ctk.CTkLabel(info, text=title, font=ctk.CTkFont(size=15, weight="bold"),
                      text_color="#eef1f5", anchor="w").pack(fill="x")
         ctk.CTkLabel(
             info,

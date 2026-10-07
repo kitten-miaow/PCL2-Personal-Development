@@ -22,6 +22,7 @@ class SaveInfo:
     last_played: str = "-"
     size: str = "-"
     file_count: int = 0
+    isolated_version: str = ""  # PCL 隔离版本名（空 = 统一 .minecraft/saves 目录）
     backups: list = field(default_factory=list)  # 该存档的备份文件路径
 
 
@@ -54,13 +55,28 @@ def read_level_dat(save_dir: Path) -> dict:
     return info
 
 
-def list_saves(mc_dir: Path) -> list[SaveInfo]:
-    """扫描存档目录，返回存档列表（按最后修改时间倒序）。"""
-    saves_dir = find_saves_dir(mc_dir)
+def list_isolated_version_dirs(mc_dir: Path) -> list[Path]:
+    """返回 .minecraft/versions 下所有版本隔离目录（排除 .json/.jar 等文件）。
+
+    PCL2 开启「版本隔离」后，每个版本的存档/资源存放在
+    .minecraft/versions/<版本名>/saves 等独立目录，避免版本间互相冲突。
+    """
+    vdir = mc_dir / "versions"
+    if not vdir.is_dir():
+        return []
+    dirs = [d for d in vdir.iterdir() if d.is_dir()]
+    dirs.sort(key=lambda p: p.name.lower())
+    return dirs
+
+
+def _scan_saves_dir(saves_dir: Path, isolated_version: str) -> list[SaveInfo]:
+    """扫描单个存档目录，返回其下所有世界存档（按最后修改时间倒序）。"""
     result: list[SaveInfo] = []
     if not saves_dir.is_dir():
         return result
-    for sub in sorted(saves_dir.iterdir(), key=lambda p: p.stat().st_mtime if p.is_dir() else 0, reverse=True):
+    for sub in sorted(saves_dir.iterdir(),
+                      key=lambda p: p.stat().st_mtime if p.is_dir() else 0,
+                      reverse=True):
         if not sub.is_dir():
             continue
         meta = read_level_dat(sub)
@@ -73,7 +89,24 @@ def list_saves(mc_dir: Path) -> list[SaveInfo]:
             last_played=meta.get("last_played", "-"),
             size=utils.format_size(utils.dir_size(sub)),
             file_count=sum(1 for _ in sub.rglob("*") if _.is_file()),
+            isolated_version=isolated_version,
         ))
+    return result
+
+
+def list_saves(mc_dir: Path) -> list[SaveInfo]:
+    """扫描存档，自动识别版本隔离。
+
+    同时检测两类位置，并合并返回：
+    1. 统一存档：.minecraft/saves（未隔离版本）
+    2. 版本隔离：.minecraft/versions/<版本名>/saves（PCL2 版本隔离）
+    """
+    result: list[SaveInfo] = []
+    result += _scan_saves_dir(mc_dir / "saves", isolated_version="")
+    for vdir in list_isolated_version_dirs(mc_dir):
+        result += _scan_saves_dir(vdir / "saves", isolated_version=vdir.name)
+    # 统一按最后修改时间倒序
+    result.sort(key=lambda s: s.path.stat().st_mtime, reverse=True)
     return result
 
 
