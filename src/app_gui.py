@@ -138,11 +138,12 @@ class App(ctk.CTk):
     # 设置页
     # ------------------------------------------------------------------
     def _render_settings_page(self):
-        self._hint("配置 PCL 根目录或 .minecraft 目录。所有路径留空则使用默认。")
+        self._hint("配置 PCL 根目录或 .minecraft 目录。可手动选择，也可一键全盘自动扫描发现。")
 
         self.settings = utils.load_settings()
         s = self.settings
-        entries: dict[str, ctk.CTkEntry] = {}
+        self._settings_entries: dict[str, ctk.CTkEntry] = {}
+        entries = self._settings_entries
 
         def browse(key):
             d = filedialog.askdirectory(title="选择文件夹")
@@ -192,10 +193,84 @@ class App(ctk.CTk):
             utils.save_settings(self.settings)
             messagebox.showinfo("MCLauncherHelper", "设置已保存")
 
-        ctk.CTkButton(self.content, text="保存设置", command=save,
+        self._scan_status = ctk.CTkLabel(self.content, text="", text_color=ACCENT,
+                                         font=ctk.CTkFont(size=12), anchor="w")
+        self._scan_status.pack(padx=26, pady=(0, 4), fill="x")
+        btn_row = ctk.CTkFrame(self.content, fg_color="transparent")
+        btn_row.pack(fill="x", padx=26, pady=(0, 14))
+        ctk.CTkButton(btn_row, text="🔍 自动扫描目录", command=self._auto_scan_mc,
                       width=160, height=38, fg_color=ACCENT_DARK,
                       hover_color="#24a86e", text_color="#ffffff",
-                      corner_radius=8).pack(padx=26, pady=14, anchor="w")
+                      corner_radius=8).pack(side="left")
+        ctk.CTkButton(btn_row, text="保存设置", command=save,
+                      width=140, height=38, fg_color=CARD,
+                      hover_color=CARD_HOVER, text_color=TEXT,
+                      corner_radius=8).pack(side="left", padx=10)
+
+    def _auto_scan_mc(self):
+        """全盘扫描所有盘符查找 .minecraft 目录，完成后弹窗供选择填入。"""
+        if hasattr(self, "_scanning") and self._scanning:
+            return
+        self._scanning = True
+        self._scan_status.configure(text="正在全盘扫描（跳过系统目录），可能需要几分钟…")
+
+        def progress(drive, found, cur, total):
+            self.after(0, lambda: self._scan_status.configure(
+                text=f"正在扫描 {drive}（{cur}/{total} 个盘）…已发现 {found} 个 .minecraft"))
+
+        def worker():
+            try:
+                dirs = pcl_parser.scan_minecraft_dirs(progress=progress)
+            except Exception as e:  # noqa: BLE001
+                self.after(0, lambda: self._scan_status.configure(text=f"扫描失败：{e}"))
+                self._scanning = False
+                return
+            self.after(0, lambda: self._show_minecraft_choices(dirs))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _show_minecraft_choices(self, dirs: list):
+        self._scanning = False
+        if not dirs:
+            self._scan_status.configure(text="未发现 .minecraft 目录，请手动选择。")
+            return
+        self._scan_status.configure(text=f"发现 {len(dirs)} 个 .minecraft 目录，请选择：")
+        win = ctk.CTkToplevel(self)
+        win.title("选择 .minecraft 目录")
+        win.geometry("760x420")
+        win.configure(fg_color=BG)
+        win.transient(self)
+        win.grab_set()
+        ctk.CTkLabel(win, text="选择要使用的 .minecraft 目录（PCL 根目录会自动推断为其上一级）",
+                     font=ctk.CTkFont(size=13, weight="bold"),
+                     text_color="#eef1f5").pack(padx=16, pady=(14, 4), anchor="w")
+        scroll = ctk.CTkScrollableFrame(win, fg_color=BG)
+        scroll.pack(fill="both", expand=True, padx=12, pady=6)
+        for d in dirs:
+            d = Path(d)
+            pcl_root = d.parent
+            row = ctk.CTkFrame(scroll, fg_color=CARD, corner_radius=8, border_width=1,
+                               border_color=BORDER)
+            row.pack(fill="x", pady=3)
+            ctk.CTkLabel(row, text=str(d), font=ctk.CTkFont(size=12), text_color=TEXT,
+                         anchor="w").pack(side="left", padx=10, pady=8, fill="x", expand=True)
+            ctk.CTkLabel(row, text=f"PCL: {pcl_root.name}", font=ctk.CTkFont(size=11),
+                         text_color=MUTED, width=140, anchor="e").pack(side="right", padx=8)
+            ctk.CTkButton(row, text="选用", width=60, height=28, fg_color=ACCENT_DARK,
+                          text_color="#ffffff",
+                          command=lambda d=d, pcl=pcl_root: self._apply_mc_choice(win, d, pcl)
+                          ).pack(side="right", padx=(0, 10), pady=6)
+
+    def _apply_mc_choice(self, win, mc_dir: Path, pcl_root: Path):
+        entries = self._settings_entries
+        if "pcl_root" in entries:
+            entries["pcl_root"].delete(0, "end")
+            entries["pcl_root"].insert(0, str(pcl_root))
+        if "mc_dir" in entries:
+            entries["mc_dir"].delete(0, "end")
+            entries["mc_dir"].insert(0, str(mc_dir))
+        self._scan_status.configure(text=f"已填入：{mc_dir}")
+        win.destroy()
 
     # ------------------------------------------------------------------
     # 存档管理页

@@ -7,10 +7,53 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import time
 from pathlib import Path
 
+from .java_manager import SKIP_DIR_NAMES, _get_fixed_drives
+
 JAVA_EXE_RE = re.compile(r"([A-Za-z]:[\\/][^\"]*?[\\/]java\.exe)", re.IGNORECASE)
+
+
+def scan_minecraft_dirs(progress=None, max_time: float = 180.0,
+                        stop_event=None) -> list[Path]:
+    """全盘遍历所有盘符，查找 PCL/MC 的 .minecraft 目录（含 versions 或 saves）。
+
+    progress(drive: str, found: int, current: int, total: int) 为进度回调。
+    找到 50 个或超过 max_time 秒自动停止。
+    """
+    found: dict[str, Path] = {}
+    start = time.time()
+    drives = _get_fixed_drives()
+    total = len(drives)
+    for idx, drive in enumerate(drives):
+        if stop_event is not None and stop_event.is_set():
+            break
+        if progress:
+            progress(drive, len(found), idx + 1, total)
+        try:
+            for dirpath, dirnames, filenames in os.walk(drive):
+                dirnames[:] = [d for d in dirnames
+                               if d not in SKIP_DIR_NAMES and not d.startswith("$")]
+                if stop_event is not None and stop_event.is_set():
+                    break
+                if time.time() - start > max_time:
+                    return list(found.values())
+                for name in dirnames:
+                    if name.lower() == ".minecraft":
+                        full = os.path.join(dirpath, name)
+                        if os.path.isdir(os.path.join(full, "versions")) or \
+                           os.path.isdir(os.path.join(full, "saves")):
+                            found[full.lower()] = Path(full)
+                if len(found) >= 50:
+                    return list(found.values())
+        except OSError:
+            continue
+        if time.time() - start > max_time:
+            break
+    return list(found.values())
 
 
 def find_pcl_config(pcl_root: str | Path) -> Path | None:
