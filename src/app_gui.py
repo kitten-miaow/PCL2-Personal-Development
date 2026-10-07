@@ -510,13 +510,42 @@ class App(ctk.CTk):
         f.pack(fill="x", padx=26, pady=8)
         ctk.CTkLabel(f, text="📂 快捷打开目录", font=ctk.CTkFont(size=15, weight="bold"),
                      text_color="#eef1f5").pack(padx=16, pady=(12, 6), anchor="w")
+        # 版本作用域选择：统一目录 或 某个隔离版本
+        self.tools_base = md
+        scope_row = ctk.CTkFrame(f, fg_color="transparent")
+        scope_row.pack(fill="x", padx=14, pady=(2, 6))
+        ctk.CTkLabel(scope_row, text="版本作用域：", font=ctk.CTkFont(size=13),
+                     text_color=MUTED).pack(side="left")
+        versions = am.list_isolated_version_dirs(md)
+        choices = ["📁 统一目录（非隔离）"] + [f"🔒 {v.name}" for v in versions]
+        self.tools_scope_var = tk.StringVar(value=choices[0])
+
+        def on_scope(choice: str):
+            if choice.startswith("🔒"):
+                self.tools_base = md / "versions" / choice[2:].strip()
+            else:
+                self.tools_base = md
+            self.tools_scope_label.configure(text=f"→ {self.tools_base}")
+
+        ctk.CTkOptionMenu(scope_row, values=choices, variable=self.tools_scope_var,
+                          command=on_scope, width=280, fg_color=CARD,
+                          button_color=CARD_HOVER, button_hover_color="#3a3e49",
+                          text_color=TEXT, dropdown_fg_color=CARD,
+                          dropdown_hover_color=CARD_HOVER, dropdown_text_color=TEXT
+                          ).pack(side="left", padx=(0, 8))
+        self.tools_scope_label = ctk.CTkLabel(scope_row, text=f"→ {md}",
+                                              font=ctk.CTkFont(size=12),
+                                              text_color=ACCENT, anchor="w")
+        self.tools_scope_label.pack(side="left", fill="x", expand=True)
+
         row = ctk.CTkFrame(f, fg_color="transparent")
         row.pack(fill="x", padx=14, pady=(0, 12))
-        for label, sub in [(".minecraft", md), ("mods", md / "mods"),
-                           ("config", md / "config"), ("saves", md / "saves")]:
+        for label in ["mods", "config", "saves", "版本根目录"]:
             ctk.CTkButton(row, text=f"打开 {label}", width=110, height=34, fg_color=CARD,
                           hover_color=CARD_HOVER, text_color=TEXT,
-                          command=lambda p=sub: self._open_dir(p)).pack(side="left", padx=4)
+                          command=lambda l=label: self._open_dir(
+                              self.tools_base if l == "版本根目录" else self.tools_base / l)
+                          ).pack(side="left", padx=4)
 
         f2 = ctk.CTkFrame(self.content, fg_color=CARD, corner_radius=10, border_width=1,
                           border_color=BORDER)
