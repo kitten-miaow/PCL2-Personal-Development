@@ -12,6 +12,11 @@ temp/
 backups/
 *.zip
 
+# PyInstaller 打包产物（exe 体积大，不提交 git）
+build/
+dist/
+*.spec
+
 # 本地配置（不提交个人路径）
 config/settings.json
 

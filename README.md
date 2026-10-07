@@ -1,7 +1,7 @@
-# MCLauncherHelper · PCL2 风格配套小工具
+# MCLauncherHelper · PCL2 风格配套小工具（桌面版）
 
 > 一款 PCL2 风格的 Minecraft 启动器配套增强工具，专注 **存档管理** 与 **Java 版本批量管理**。
-> 轻量化本地工具，不替换原有启动器，作为 PCL2 的辅助面板使用。
+> **桌面可执行软件**：打包为 .exe，任何 Windows 用户下载即用，无需安装 Python 和依赖。
 
 ## 功能特性
 
@@ -10,58 +10,68 @@
 - 读取 `level.dat`，展示存档名称、游戏版本、最后游玩时间
 - 一键备份为 zip，备份包自动命名 `世界名_时间戳.zip`
 - 备份管理：查看历史备份、删除旧备份、从备份包恢复存档（带二次确认）
-- 批量备份：勾选多个存档一次性打包
-- 备份策略：可设置「保留最近 N 份备份，自动清理更早的」
+- 批量备份、备份策略：保留最近 N 份备份，自动清理更早的
 
 ### ☕ Java 版本批量管理（核心）
 - 扫描本地 Java 目录，识别 `java.exe`，提取版本、位数、路径
 - 批量校验 Java 可用性（运行 `java -version` 测试）
-- 生成/更新 PCL 的 Java 配置条目（只写配置文件，**不删除任何本地 java 文件**）
 - 导出 / 导入 Java 列表（json），重装启动器可一键恢复
+- 只读操作，**不删除任何本地 java 文件**
 
 ### 🧰 附加小工具
-- 一键打开 PCL 根目录 / mods 目录 / config 目录
+- 一键打开 .minecraft / mods / config / saves 目录
 - 实例缓存清理（日志、崩溃报告、临时文件，不碰 mod 和存档）
 
 ## 安全设计
 > 本工具**只读写 PCL 的配置文件与用户指定的存档/备份目录**。
-> 恢复存档、删除备份、清理缓存等危险操作**全部带二次确认**，防止误操作。
+> 恢复存档、删除备份、清理缓存等危险操作**全部带确认弹窗**，防止误操作。
 > 不删除任何本地 Java 文件。
+
+## 使用方法（最终用户）
+1. 拿到 `MCLauncherHelper.exe`，双击运行即可（免安装 Python）
+2. 打开后进入「设置」，填入你的 PCL 根目录（或 `.minecraft` 目录）
+3. 回到「存档管理」即可看到存档，开始备份/管理
+
+> ⚠️ 杀毒软件可能对未签名 exe 误报，属正常现象，选择"仍要运行"即可。
 
 ## 技术栈
 - Python 3.9+
-- Streamlit（WebGUI，仿 PCL 深色界面）
+- CustomTkinter（桌面 GUI，PCL 深色界面）
 - nbtlib（解析 Minecraft 存档 level.dat）
-- pathlib / shutil / zipfile（文件与打包）
+- PyInstaller（打包为 exe）
 
 ## 目录结构
 ```
 MCLauncherHelper/
-├── app.py                 # Streamlit 主程序入口
+├── main.py                # 桌面版入口
 ├── requirements.txt       # 依赖清单
 ├── README.md
 ├── .gitignore
 ├── src/
+│   ├── __init__.py
+│   ├── app_gui.py         # CustomTkinter 桌面界面（设置/存档/Java/工具页）
 │   ├── utils.py           # 通用工具：路径、时间戳、zip、json
 │   ├── pcl_parser.py      # PCL 根目录定位、config.json 解析
 │   ├── archive_manager.py # 存档扫描、level.dat 读取、备份、恢复
-│   └── java_manager.py    # Java 扫描、校验、PCL 配置生成
+│   └── java_manager.py    # Java 扫描、校验、配置导出
 ├── config/
 │   └── settings.json      # 工具自身配置（首次运行自动生成）
-└── assets/
-    └── style.css          # PCL 深色主题样式
+└── dist/
+    └── MCLauncherHelper.exe  # 打包产物（不提交 git）
 ```
 
-## 快速开始
+## 从源码运行
 ```bash
-# 1. 安装依赖
 pip install -r requirements.txt
-
-# 2. 启动
-streamlit run app.py
+python main.py
 ```
 
-首次运行在侧边栏「设置」中填入你的 PCL 根目录（或 MC 目录），工具会自动扫描。
+## 打包为 exe
+```bash
+pip install pyinstaller
+pyinstaller --noconfirm --onefile --windowed --name MCLauncherHelper main.py
+```
+产物位于 `dist\MCLauncherHelper.exe`，单文件 30MB 左右，可直接分发。
 
 ## 开发计划（按提交分批）
 | Commit | 内容 |
@@ -70,12 +80,12 @@ streamlit run app.py
 | 2 | PCL 配置解析（pcl_parser） |
 | 3 | 存档扫描 + level.dat 读取（archive_manager 基础） |
 | 4 | 存档备份 / 恢复 |
-| 5 | Streamlit 页面框架 + PCL 深色样式 |
+| 5 | 桌面版 UI（CustomTkinter）+ 设置页 |
 | 6 | Java 扫描 + 可用性校验 |
-| 7 | Java 批量导入 PCL 配置、清理无效条目 |
+| 7 | Java 配置导入导出 |
 | 8 | 批量备份、旧备份自动清理 |
 | 9 | 附加工具（打开目录、清理缓存） |
-| 10 | Bug 修复 + 完善文档 |
+| 10 | 打包 exe + Bug 修复 + 完善文档 |
 
 ## 许可
 仅供个人学习使用。与 Mojang / Microsoft / PCL 官方无关。
