@@ -62,13 +62,67 @@ class App(ctk.CTk):
         self.geometry("1120x720")
         self.minsize(980, 620)
         self.settings = utils.load_settings()
-        self.saves_cache: list[am.SaveInfo] = []
-        self.java_cache: list[jm.JavaInfo] = []
-        self._current_page = "存档管理"
+        # 恢复上次会话缓存（存档/Java），实现"重启自动显示上次关闭时数据"
+        self._restore_state()
+        self._current_page = self._state_last_page or "存档管理"
 
         self._build_sidebar()
         self._build_content()
-        self.show_page("存档管理")
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.show_page(self._current_page)
+
+    # ------------------------------------------------------------------
+    # 会话状态：恢复 / 保存
+    # ------------------------------------------------------------------
+    def _restore_state(self):
+        state = utils.load_state()
+        self._state_last_page = state.get("last_page", "存档管理")
+        self._state_mc_dir = state.get("mc_dir", "")
+        self.saves_cache = [
+            am.SaveInfo(
+                name=d.get("name", ""), dir_name=d.get("dir_name", ""),
+                path=Path(d["path"]),
+                game_version=d.get("game_version", "-"),
+                last_played=d.get("last_played", "-"),
+                size=d.get("size", "-"),
+                file_count=d.get("file_count", 0),
+                isolated_version=d.get("isolated_version", ""),
+            )
+            for d in state.get("saves", []) if d.get("path")
+        ]
+        self.java_cache = [
+            jm.JavaInfo(
+                path=Path(d["path"]), version=d.get("version", "-"),
+                bitness=d.get("bitness", "-"), ok=d.get("ok", False),
+                detail=d.get("detail", ""),
+            )
+            for d in state.get("java", []) if d.get("path")
+        ]
+
+    def _state_to_save(self, s: am.SaveInfo) -> dict:
+        return {"name": s.name, "dir_name": s.dir_name, "path": str(s.path),
+                "game_version": s.game_version, "last_played": s.last_played,
+                "size": s.size, "file_count": s.file_count,
+                "isolated_version": s.isolated_version}
+
+    def _state_to_java(self, j: jm.JavaInfo) -> dict:
+        return {"path": str(j.path), "version": j.version, "bitness": j.bitness,
+                "ok": j.ok, "detail": j.detail}
+
+    def _persist_state(self):
+        md = utils.resolve_mc_dir(self.settings)
+        utils.save_state({
+            "last_page": self._current_page,
+            "mc_dir": str(md) if md else "",
+            "saves": [self._state_to_save(s) for s in self.saves_cache],
+            "java": [self._state_to_java(j) for j in self.java_cache],
+        })
+
+    def _on_close(self):
+        try:
+            self._persist_state()
+        finally:
+            self.destroy()
 
     # ------------------------------------------------------------------
     # 侧边栏导航
@@ -298,7 +352,13 @@ class App(ctk.CTk):
         if md is None:
             self._empty("未配置有效的 .minecraft 目录。请到「设置」填写 PCL 根目录或 MC 目录。")
             return
-        self._load_saves(md)
+        if self.saves_cache and self._state_mc_dir == str(md):
+            # 恢复上次关闭时数据，并在后台自动校对到最新
+            self._hint("已显示上次关闭时的存档，正在后台校对最新数据…")
+            self._render_saves(self.saves_cache, md)
+            run_async(am.list_saves, md, on_done=lambda r: self._render_saves(r, md))
+        else:
+            self._load_saves(md)
 
     def show_page_now(self):
         self.show_page(self._current_page)
@@ -329,6 +389,7 @@ class App(ctk.CTk):
         self._save_rows = []
         for i, s in enumerate(result):
             self._save_rows.append(self._build_save_row(s, backup_dir))
+        self._persist_state()
 
     def _build_save_row(self, s: am.SaveInfo, backup_dir: Path):
         card = ctk.CTkFrame(self.saves_scroll, fg_color=CARD, corner_radius=10,
@@ -481,7 +542,10 @@ class App(ctk.CTk):
         self.java_status.pack(side="left", padx=14)
 
         if self.java_cache:
+            # 恢复上次关闭时的 Java 列表，并在后台快速校对
+            self.java_status.configure(text=f"已显示上次关闭时的 Java（{len(self.java_cache)} 个），正在后台校对…")
             self._render_java_list(self.java_cache)
+            run_async(jm.scan_java, [], on_done=self._render_java_list)
 
     def _scan_java(self):
         self.java_status.configure(text="正在扫描并校验…")
@@ -520,6 +584,7 @@ class App(ctk.CTk):
         self.java_cache = result
         ok = sum(1 for x in result if x.ok)
         self.java_status.configure(text=f"发现 {len(result)} 个，可用 {ok} 个")
+        self._persist_state()
         if not result:
             ctk.CTkLabel(self.java_scroll, text="未发现 Java，可填写额外目录再试。",
                          text_color=MUTED).pack(pady=30)

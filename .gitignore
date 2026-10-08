@@ -16,8 +16,9 @@ backups/
 build/
 *.spec
 
-# 本地配置（不提交个人路径）
+# 本地配置与会话状态（不提交个人路径 / 上次数据）
 config/settings.json
+config/state.json
 
 # IDE
 .idea/

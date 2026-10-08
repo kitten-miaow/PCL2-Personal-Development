@@ -10,6 +10,7 @@ from pathlib import Path
 # 项目根目录（src 的上一级）
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config" / "settings.json"
+STATE_PATH = PROJECT_ROOT / "config" / "state.json"
 
 DEFAULT_SETTINGS = {
     "pcl_root": "",       # PCL 安装根目录（含 .minecraft）
@@ -17,6 +18,23 @@ DEFAULT_SETTINGS = {
     "backup_dir": "",     # 备份保存目录，留空则用 mc_dir/../MCLauncherHelper_backups
     "keep_backups": 10,   # 每个存档保留的最近备份数
 }
+
+
+def load_state() -> dict:
+    """读取上次会话状态（存档/Java 缓存、上次页面等），不存在或损坏返回空。"""
+    if not STATE_PATH.exists():
+        return {}
+    try:
+        return json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_state(data: dict) -> None:
+    """保存会话状态，供下次启动自动恢复显示。"""
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    STATE_PATH.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def now_stamp() -> str:
