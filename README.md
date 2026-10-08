@@ -53,18 +53,21 @@ MCLauncherHelper/
 ├── main.py                # 桌面版入口
 ├── requirements.txt       # 依赖清单
 ├── README.md
+├── LICENSE                # MIT 开源许可证
 ├── .gitignore
+├── assets/
+│   └── banner.png         # README 封面图
 ├── src/
 │   ├── __init__.py
 │   ├── app_gui.py         # CustomTkinter 桌面界面（设置/存档/Java/工具页）
 │   ├── utils.py           # 通用工具：路径、时间戳、zip、json
-│   ├── pcl_parser.py      # PCL 根目录定位、config.json 解析
-│   ├── archive_manager.py # 存档扫描、level.dat 读取、备份、恢复
-│   └── java_manager.py    # Java 扫描、校验、配置导出
+│   ├── pcl_parser.py      # PCL 根目录定位、config.json 解析、全盘扫描
+│   ├── archive_manager.py # 存档扫描、level.dat 读取、备份、恢复、版本隔离
+│   └── java_manager.py    # Java 全盘扫描、校验、配置导出
 ├── config/
 │   └── settings.json      # 工具自身配置（首次运行自动生成）
 └── dist/
-    └── MCLauncherHelper.exe  # 打包产物（不提交 git）
+    └── MCLauncherHelper.exe  # 打包产物（已提交 git，可随仓库直接下载）
 ```
 
 ## 从源码运行
