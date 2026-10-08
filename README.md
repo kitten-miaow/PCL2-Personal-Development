@@ -1,3 +1,9 @@
+<div align="center">
+
+![MCLauncherHelper](assets/banner.png)
+
+</div>
+
 # MCLauncherHelper · PCL2 风格配套小工具（桌面版）
 
 > 一款 PCL2 风格的 Minecraft 启动器配套增强工具，专注 **存档管理** 与 **Java 版本批量管理**。
@@ -89,4 +95,4 @@ pyinstaller --noconfirm --onefile --windowed --name MCLauncherHelper main.py
 | 10 | 打包 exe + Bug 修复 + 完善文档 |
 
 ## 许可
-仅供个人学习使用。与 Mojang / Microsoft / PCL 官方无关。
+本项目采用 [MIT 许可证](LICENSE)。与 Mojang / Microsoft / PCL 官方无关。
